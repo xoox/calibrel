@@ -9,5 +9,31 @@ Challenges and Opportunities in Robot Perception, Barcelona, Spain, pp.
 
 The code is largely copied from OpenCV's implementation.
 
-*Note*: the current results are not as good as expected. See #1 for test
-results and further discussion.
+**Note**: the current results are not as good as expected. See
+https://github.com/xoox/calibDLR11/issues/1 for test results and further
+discussion.
+
+#### How to build
+
+```
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+```
+
+#### Run test program
+
+```
+test_calibDLR11 --mode=0 default.xml
+```
+
+Where `mode` has one of the following three values:
+
+* **0** Test with this DLR11 method.
+* **1** Test with OpenCV's calibration method.
+* **2** Test with the hybrid method, i.e., OpenCV's calibration method
+  followed by DLR11 method.
+
+See [calibDLR11_testdata](https://github.com/xoox/calibDLR11_testdata)
+for examples of XML setting files.
