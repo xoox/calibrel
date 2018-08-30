@@ -1,0 +1,7 @@
+---
+Language: Cpp
+BasedOnStyle: WebKit
+AlwaysBreakTemplateDeclarations: true
+ColumnLimit: 78
+NamespaceIndentation: None
+...
