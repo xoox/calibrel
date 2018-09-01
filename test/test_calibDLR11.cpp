@@ -27,7 +27,7 @@ static void help()
             "configuration file, which has detailed help of how to edit it.  "
             "It may be any OpenCV supported file format XML/YAML."
          << endl
-         << "The only option of --mode accept three values:\n0 for DLR11 "
+         << "The option of --mode accept three values:\n0 for DLR11 "
             "method;\n1 for OpenCV standard method;\n2 for standard method "
             "followed by DLR11 method."
          << endl;
@@ -293,7 +293,8 @@ int main(int argc, char* argv[])
     const String keys
         = "{help h usage ? |           | print this message            }"
           "{@set           |default.xml| input setting file            }"
-          "{mode           |0          | calibration method selection  }";
+          "{mode           |0          | calibration method selection  }"
+          "{winSize        |7          | Half of search window         }";
     CommandLineParser parser(argc, argv, keys);
     parser.about("camera calibration test program");
     if (!parser.check()) {
@@ -307,6 +308,7 @@ int main(int argc, char* argv[])
     }
     const string inputSettingsFile = parser.get<string>(0);
     CALIB_MODE calib_mode = CALIB_MODE(parser.get<int>("mode"));
+    int winSize = parser.get<int>("winSize");
 
     //! [file_read]
     Settings s;
@@ -406,7 +408,8 @@ int main(int argc, char* argv[])
             if (s.calibrationPattern == Settings::CHESSBOARD) {
                 Mat viewGray;
                 cvtColor(view, viewGray, COLOR_BGR2GRAY);
-                cornerSubPix(viewGray, pointBuf, Size(6, 6), Size(1, 1),
+                cornerSubPix(viewGray, pointBuf, Size(winSize, winSize),
+                    Size(1, 1),
                     TermCriteria(
                         TermCriteria::EPS + TermCriteria::COUNT, 30, 0.0001));
             }
