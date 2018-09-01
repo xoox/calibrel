@@ -24,6 +24,8 @@ if (WIN32)
     if (MSVC)
         add_compile_options(/W4)
     endif(MSVC)
+else(WIN32)
+    add_compile_options(-Wall)
 endif(WIN32)
 
 # set library and executable locations
