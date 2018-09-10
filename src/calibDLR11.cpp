@@ -622,9 +622,9 @@ static void projectPoints2(const CvMat* objectPoints, const CvMat* r_vec,
                 dpdo_p[i * 3] = fx * dxd_dX;
                 dpdo_p[i * 3 + 1] = fx * dxd_dY;
                 dpdo_p[i * 3 + 2] = fx * dxd_dZ;
-                dpdo_p[dpdr_step + i * 3] = fy * dyd_dX;
-                dpdo_p[dpdr_step + i * 3 + 1] = fy * dyd_dY;
-                dpdo_p[dpdr_step + i * 3 + 2] = fy * dyd_dZ;
+                dpdo_p[dpdo_step + i * 3] = fy * dyd_dX;
+                dpdo_p[dpdo_step + i * 3 + 1] = fy * dyd_dY;
+                dpdo_p[dpdo_step + i * 3 + 2] = fy * dyd_dZ;
                 dpdo_p += dpdo_step * 2;
             }
         }
