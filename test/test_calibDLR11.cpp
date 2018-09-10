@@ -284,7 +284,7 @@ enum CALIB_MODE {
 };
 
 bool runCalibrationAndSave(Settings& s, Size imageSize, Mat& cameraMatrix,
-    Mat& distCoeffs, vector<vector<Point2f> > imagePoints,
+    Mat& distCoeffs, vector<vector<Point2f> > imagePoints, float grid_width,
     CALIB_MODE calib_mode = DLR11);
 
 int main(int argc, char* argv[])
@@ -294,6 +294,8 @@ int main(int argc, char* argv[])
         = "{help h usage ? |           | print this message            }"
           "{@set           |default.xml| input setting file            }"
           "{mode           |0          | calibration method selection  }"
+          "{d              |           | actual distance between top-left "
+          "and top-right corners of the calibration grid }"
           "{winSize        |7          | Half of search window         }";
     CommandLineParser parser(argc, argv, keys);
     parser.about("camera calibration test program");
@@ -331,6 +333,11 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    float grid_width = s.squareSize * (s.boardSize.width - 1);
+    if (parser.has("d")) {
+        grid_width = parser.get<float>("d");
+    }
+
     vector<vector<Point2f> > imagePoints;
     Mat cameraMatrix, distCoeffs;
     Size imageSize;
@@ -350,7 +357,7 @@ int main(int argc, char* argv[])
         // show result -------------
         if (mode == CAPTURING && imagePoints.size() >= (size_t)s.nrFrames) {
             if (runCalibrationAndSave(s, imageSize, cameraMatrix, distCoeffs,
-                    imagePoints, calib_mode))
+                    imagePoints, grid_width, calib_mode))
                 mode = CALIBRATED;
             else
                 mode = DETECTION;
@@ -360,7 +367,7 @@ int main(int argc, char* argv[])
             // if calibration threshold was not reached yet, calibrate now
             if (mode != CALIBRATED && !imagePoints.empty())
                 runCalibrationAndSave(s, imageSize, cameraMatrix, distCoeffs,
-                    imagePoints, calib_mode);
+                    imagePoints, grid_width, calib_mode);
             break;
         }
         //! [get_input]
@@ -580,7 +587,7 @@ static void calcBoardCornerPositions(Size boardSize, float squareSize,
 static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
     Mat& distCoeffs, vector<vector<Point2f> > imagePoints, vector<Mat>& rvecs,
     vector<Mat>& tvecs, vector<float>& reprojErrs, double& totalAvgErr,
-    CALIB_MODE calib_mode = DLR11)
+    float grid_width, CALIB_MODE calib_mode = DLR11)
 {
     //! [fixed_aspect]
     cameraMatrix = Mat::eye(3, 3, CV_64F);
@@ -596,6 +603,7 @@ static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
     vector<Point3f> objectPoints;
     calcBoardCornerPositions(
         s.boardSize, s.squareSize, objectPoints, s.calibrationPattern);
+    objectPoints[s.boardSize.width - 1].x = objectPoints[0].x + grid_width;
 
     // Find intrinsic and extrinsic camera parameters
     double rms;
@@ -787,15 +795,16 @@ static void saveCameraParams(Settings& s, Size& imageSize, Mat& cameraMatrix,
 
 //! [run_and_save]
 bool runCalibrationAndSave(Settings& s, Size imageSize, Mat& cameraMatrix,
-    Mat& distCoeffs, vector<vector<Point2f> > imagePoints,
+    Mat& distCoeffs, vector<vector<Point2f> > imagePoints, float grid_width,
     CALIB_MODE calib_mode)
 {
     vector<Mat> rvecs, tvecs;
     vector<float> reprojErrs;
     double totalAvgErr = 0;
 
-    bool ok = runCalibration(s, imageSize, cameraMatrix, distCoeffs,
-        imagePoints, rvecs, tvecs, reprojErrs, totalAvgErr, calib_mode);
+    bool ok
+        = runCalibration(s, imageSize, cameraMatrix, distCoeffs, imagePoints,
+            rvecs, tvecs, reprojErrs, totalAvgErr, grid_width, calib_mode);
     cout << (ok ? "Calibration succeeded" : "Calibration failed")
          << ". avg re projection error = " << totalAvgErr << endl;
 
