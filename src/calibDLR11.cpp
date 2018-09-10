@@ -539,9 +539,9 @@ static void projectPoints2(const CvMat* objectPoints, const CvMat* r_vec,
                 double dr4_dX = 2 * r2 * dr2_dX;
                 double dr4_dY = 2 * r2 * dr2_dY;
                 double dr4_dZ = 2 * r2 * dr2_dZ;
-                double dr6_dX = r2 * dr4_dX + r4 * dr2_dX;
-                double dr6_dY = r2 * dr4_dY + r4 * dr2_dY;
-                double dr6_dZ = r2 * dr4_dZ + r4 * dr2_dZ;
+                double dr6_dX = 3 * r4 * dr2_dX;
+                double dr6_dY = 3 * r4 * dr2_dY;
+                double dr6_dZ = 3 * r4 * dr2_dZ;
                 double da1_dX = 2 * y * dx_dX + 2 * x * dy_dX;
                 double da1_dY = 2 * y * dx_dY + 2 * x * dy_dY;
                 double da1_dZ = 2 * y * dx_dZ + 2 * x * dy_dZ;
