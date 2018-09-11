@@ -296,7 +296,7 @@ int main(int argc, char* argv[])
           "{mode           |0          | calibration method selection  }"
           "{d              |           | actual distance between top-left "
           "and top-right corners of the calibration grid }"
-          "{winSize        |7          | Half of search window         }";
+          "{winSize        |9          | Half of search window         }";
     CommandLineParser parser(argc, argv, keys);
     parser.about("camera calibration test program");
     if (!parser.check()) {
@@ -416,7 +416,7 @@ int main(int argc, char* argv[])
                 Mat viewGray;
                 cvtColor(view, viewGray, COLOR_BGR2GRAY);
                 cornerSubPix(viewGray, pointBuf, Size(winSize, winSize),
-                    Size(1, 1),
+                    Size(-1, -1),
                     TermCriteria(
                         TermCriteria::EPS + TermCriteria::COUNT, 30, 0.0001));
             }
