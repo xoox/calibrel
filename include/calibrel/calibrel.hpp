@@ -53,6 +53,9 @@
 #include <iterator>
 #include <stdio.h>
 
+/*!
+ *  \brief  Namespace calrel.
+ */
 namespace calrel {
 
 using namespace cv;
@@ -78,11 +81,15 @@ using namespace cv;
     Z-coordinate of each input object point is 0. On output, the refined
     pattern points are returned for imperfect planar target.
 
-    \param cameraMatrix Output 3x3 floating-point camera matrix \f$A =
-    \vecthreethree{f_x}{0}{c_x}{0}{f_y}{c_y}{0}{0}{1}\f$ . If
-    CV_CALIB_USE_INTRINSIC_GUESS and/or CALIB_FIX_ASPECT_RATIO are
-    specified, some or all of fx, fy, cx, cy must be initialized before
-    calling the function.
+    \param fixedObjPt The index of the 3D object point to be set as (d,
+    0, 0) as in Strobl's paper. Usually it is the top-right corner point
+    of the calibration board grid.
+
+    \param cameraMatrix Output 3x3 floating-point camera matrix
+    \f$\begin{bmatrix} f_x & 0 & c_x\\ 0 & f_y & c_y\\ 0 & 0 & 1
+    \end{bmatrix}\f$. If CV_CALIB_USE_INTRINSIC_GUESS and/or
+    CALIB_FIX_ASPECT_RATIO are specified, some or all of fx, fy, cx, cy
+    must be initialized before calling the function.
 
     \param distCoeffs Output vector of distortion coefficients \f$(k_1,
     k_2, p_1, p_2[, k_3[, k_4, k_5, k_6 [, s_1, s_2, s_3, s_4[, \tau_x,
@@ -97,7 +104,7 @@ using namespace cv;
     that is, a real position of the calibration pattern in the k-th
     pattern view (k=0.. *M* -1).
 
-    \aram tvecs Output vector of translation vectors estimated for each
+    \param tvecs Output vector of translation vectors estimated for each
     pattern view.
 
     \param newObjPoints The updated output vector of pattern points.
@@ -212,14 +219,7 @@ double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
         TermCriteria::COUNT + TermCriteria::EPS, 60, DBL_EPSILON * 30));
 
 /*!
-    \overload double calibrateCamera(InputArrayOfArrays imagePoints,
-        Size imageSize, InputArray objectPoints, int fixedObjPt,
-        InputOutputArray cameraMatrix, InputOutputArray distCoeffs,
-        OutputArrayOfArrays rvecs, OutputArrayOfArrays tvecs,
-        OutputArray newObjPoints, OutputArray stdDeviations, OutputArray
-        perViewErrors, int flags = 0, TermCriteria criteria =
-        TermCriteria( TermCriteria::COUNT + TermCriteria::EPS, 60,
-        DBL_EPSILON * 30))
+    \overload 
  */
 double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
     InputArray objectPoints, int fixedObjPt, InputOutputArray cameraMatrix,
