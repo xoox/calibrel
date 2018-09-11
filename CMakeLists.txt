@@ -61,3 +61,31 @@ install(TARGETS ${PROJECT_NAME}
     LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
+
+#-- Add an Option to toggle the generation of the API documentation
+option(BUILD_DOCUMENTATION "Use Doxygen to create the HTML based API documentation" OFF)
+if(BUILD_DOCUMENTATION)
+    find_package(Doxygen)
+    if (NOT DOXYGEN_FOUND)
+    message(FATAL_ERROR
+      "Doxygen is needed to build the documentation. Please install it correctly")
+    endif()
+    if(DOXYGEN_VERSION VERSION_LESS "1.8.0")
+        message(WARNING "Doxygen >=1.8.0 is needed for better output.")
+    endif()
+    # - DOXYGEN_STRIP_FROM_INC_PATH corresponding to STRIP_FROM_INC_PATH in the doxy file
+    set(DOXYGEN_STRIP_FROM_INC_PATH "\"${CMAKE_SOURCE_DIR}/include\"")
+    #-- Configure the Template Doxyfile for our specific project
+    configure_file(doc/Doxyfile.in
+                 ${PROJECT_BINARY_DIR}/doc/Doxyfile  @ONLY IMMEDIATE)
+    #-- Add a custom target to run Doxygen when ever the project is built
+    add_custom_target (docs
+                     COMMAND ${DOXYGEN_EXECUTABLE}
+                     ${PROJECT_BINARY_DIR}/doc/Doxyfile
+                     SOURCES ${PROJECT_BINARY_DIR}/doc/Doxyfile)
+    # IF you do NOT want the documentation to be generated EVERY time you build the project
+    # then leave out the 'ALL' keyword from the above command.
+    install(DIRECTORY ${PROJECT_BINARY_DIR}/doc/html
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        COMPONENT doc)
+endif(BUILD_DOCUMENTATION)
