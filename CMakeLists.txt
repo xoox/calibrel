@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(calibDLR11 VERSION 0.1)
+project(calibrel VERSION 0.2)
 
 #------------------------------------------------------------------------------
 # Dependencies
