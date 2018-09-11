@@ -53,7 +53,7 @@
 #include <iterator>
 #include <stdio.h>
 
-namespace dlr11 {
+namespace calrel {
 
 using namespace cv;
 
@@ -228,4 +228,4 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
     TermCriteria criteria = TermCriteria(
         TermCriteria::COUNT + TermCriteria::EPS, 60, DBL_EPSILON * 30));
 
-} /* end of namespace dlr11 */
+} /* end of namespace calrel */

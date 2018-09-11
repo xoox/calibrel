@@ -43,7 +43,7 @@
     of the possibility of such damage.
  */
 
-#include "calibDLR11/calibDLR11.hpp"
+#include "calibrel/calibrel.hpp"
 
 /*
     This is (in a large extent) based on the paper:
@@ -52,7 +52,7 @@
     2011 IEEE International Conference on Computer Vision Workshops.
  */
 
-namespace dlr11 {
+namespace calrel {
 
 using namespace cv;
 
@@ -1678,4 +1678,4 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         _newObjPoints, noArray(), noArray(), noArray(), flags, criteria);
 }
 
-} /* end of namespace dlr11 */
+} /* end of namespace calrel */

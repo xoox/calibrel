@@ -12,7 +12,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
-#include "calibDLR11/calibDLR11.hpp"
+#include "calibrel/calibrel.hpp"
 
 using namespace cv;
 using namespace std;
@@ -23,13 +23,13 @@ static void help()
          << "Usage: camera_calibration [options] [configuration_file -- "
             "default ./default.xml]"
          << endl
-         << "In the calibDLR11_testdata project you'll find the "
-            "configuration file, which has detailed help of how to edit it.  "
-            "It may be any OpenCV supported file format XML/YAML."
+         << "In the calibrel_testdata project you'll find the configuration "
+            "file, which has detailed help of how to edit it. It may be any "
+            "OpenCV supported file format XML/YAML."
          << endl
-         << "The option of --mode accept three values:\n0 for DLR11 "
+         << "The option of --mode accept three values:\n0 for this project's "
             "method;\n1 for OpenCV standard method;\n2 for standard method "
-            "followed by DLR11 method."
+            "followed by this project's method."
          << endl;
 }
 class Settings {
@@ -634,17 +634,17 @@ static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
             rms = calibrateCamera(objectPointsArray, imagePoints, imageSize,
                 cameraMatrix, distCoeffs, rvecs, tvecs,
                 s.flag | CALIB_USE_LU);
-            rms = dlr11::calibrateCamera(imagePoints, imageSize, objectPoints,
-                s.boardSize.width - 1, cameraMatrix, distCoeffs, rvecs, tvecs,
-                newObjPoints,
+            rms = calrel::calibrateCamera(imagePoints, imageSize,
+                objectPoints, s.boardSize.width - 1, cameraMatrix, distCoeffs,
+                rvecs, tvecs, newObjPoints,
                 s.flag | CALIB_USE_LU | CALIB_USE_INTRINSIC_GUESS);
             objectPointsArray.clear();
             objectPointsArray.resize(imagePoints.size(), newObjPoints);
             break;
         default:
-            rms = dlr11::calibrateCamera(imagePoints, imageSize, objectPoints,
-                s.boardSize.width - 1, cameraMatrix, distCoeffs, rvecs, tvecs,
-                newObjPoints, s.flag | CALIB_USE_LU);
+            rms = calrel::calibrateCamera(imagePoints, imageSize,
+                objectPoints, s.boardSize.width - 1, cameraMatrix, distCoeffs,
+                rvecs, tvecs, newObjPoints, s.flag | CALIB_USE_LU);
             objectPointsArray.clear();
             objectPointsArray.resize(imagePoints.size(), newObjPoints);
         }
