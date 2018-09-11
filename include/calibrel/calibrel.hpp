@@ -202,18 +202,18 @@ using namespace cv;
         camera parameters and the poses) object points objectPoints. See
         projectPoints for details.
  */
-double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
-    InputArray _objectPoints, int _fixedObjPt, InputOutputArray _cameraMatrix,
-    InputOutputArray _distCoeffs, OutputArrayOfArrays _rvecs,
-    OutputArrayOfArrays _tvecs, OutputArray _newObjPoints,
+double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
+    InputArray objectPoints, int fixedObjPt, InputOutputArray cameraMatrix,
+    InputOutputArray distCoeffs, OutputArrayOfArrays rvecs,
+    OutputArrayOfArrays tvecs, OutputArray newObjPoints,
     OutputArray stdDeviationsIntrinsics, OutputArray stdDeviationsExtrinsics,
-    OutputArray _perViewErrors, int flags = 0,
+    OutputArray perViewErrors, int flags = 0,
     TermCriteria criteria = TermCriteria(
         TermCriteria::COUNT + TermCriteria::EPS, 60, DBL_EPSILON * 30));
 
 /*!
     \overload double calibrateCamera(InputArrayOfArrays imagePoints,
-        Size imageSize, InputArray objectPoints, int _fixedObjPt,
+        Size imageSize, InputArray objectPoints, int fixedObjPt,
         InputOutputArray cameraMatrix, InputOutputArray distCoeffs,
         OutputArrayOfArrays rvecs, OutputArrayOfArrays tvecs,
         OutputArray newObjPoints, OutputArray stdDeviations, OutputArray
@@ -221,10 +221,10 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         TermCriteria( TermCriteria::COUNT + TermCriteria::EPS, 60,
         DBL_EPSILON * 30))
  */
-double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
-    InputArray _objectPoints, int _fixedObjPt, InputOutputArray _cameraMatrix,
-    InputOutputArray _distCoeffs, OutputArrayOfArrays _rvecs,
-    OutputArrayOfArrays _tvecs, OutputArray _newObjPoints, int flags = 0,
+double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
+    InputArray objectPoints, int fixedObjPt, InputOutputArray cameraMatrix,
+    InputOutputArray distCoeffs, OutputArrayOfArrays rvecs,
+    OutputArrayOfArrays tvecs, OutputArray newObjPoints, int flags = 0,
     TermCriteria criteria = TermCriteria(
         TermCriteria::COUNT + TermCriteria::EPS, 60, DBL_EPSILON * 30));
 
