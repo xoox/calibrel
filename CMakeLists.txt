@@ -57,6 +57,7 @@ install(
     )
 
 install(TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}Targets
     RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -89,3 +90,36 @@ if(BUILD_DOCUMENTATION)
         DESTINATION ${CMAKE_INSTALL_DOCDIR}
         COMPONENT doc)
 endif(BUILD_DOCUMENTATION)
+
+#-----------------------------------------------------------------------
+include(CMakePackageConfigHelpers)
+
+string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
+configure_package_config_file(
+    cmake/package-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+    PATH_VARS
+    CMAKE_INSTALL_INCLUDEDIR
+    CMAKE_INSTALL_LIBDIR
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+    )
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+    )
+
+install(
+    FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+    )
+
+export(TARGETS ${PROJECT_NAME} FILE ${PROJECT_NAME}Targets.cmake)
+export(PACKAGE ${PROJECT_NAME})
+
+install(EXPORT ${PROJECT_NAME}Targets
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
