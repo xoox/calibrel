@@ -1192,7 +1192,7 @@ static double calibrateCamera2Internal(const CvMat* objectPoints,
                     "The specified aspect ratio (= cameraMatrix[0][0] / "
                     "cameraMatrix[1][1]) is incorrect");
         }
-        CvMat _matM = cvMat(matM), m = cvMat(_m);
+        CvMat _matM = CvMat(matM), m = CvMat(_m);
         initIntrinsicParams2D(
             &_matM, &m, npoints, imageSize, &matA, aspectRatio);
     }
@@ -1323,20 +1323,20 @@ static double calibrateCamera2Internal(const CvMat* objectPoints,
             cvGetRows(solver.param, &_ti, NINTRINSIC + i * 6 + 3,
                 NINTRINSIC + i * 6 + 6);
 
-            CvMat _mi = cvMat(_m.colRange(pos, pos + ni));
-            CvMat _me = cvMat(allErrors.colRange(pos, pos + ni));
+            CvMat _mi = CvMat(_m.colRange(pos, pos + ni));
+            CvMat _me = CvMat(allErrors.colRange(pos, pos + ni));
 
             _Je.resize(ni * 2);
             _Ji.resize(ni * 2);
             _Jo.resize(ni * 2);
             _err.resize(ni * 2);
-            CvMat _dpdr = cvMat(_Je.colRange(0, 3));
-            CvMat _dpdt = cvMat(_Je.colRange(3, 6));
-            CvMat _dpdf = cvMat(_Ji.colRange(0, 2));
-            CvMat _dpdc = cvMat(_Ji.colRange(2, 4));
-            CvMat _dpdk = cvMat(_Ji.colRange(4, NINTRINSIC));
-            CvMat _dpdo = cvMat(_Jo.colRange(0, maxPoints * 3));
-            CvMat _mp = cvMat(_err.reshape(2, 1));
+            CvMat _dpdr = CvMat(_Je.colRange(0, 3));
+            CvMat _dpdt = CvMat(_Je.colRange(3, 6));
+            CvMat _dpdf = CvMat(_Ji.colRange(0, 2));
+            CvMat _dpdc = CvMat(_Ji.colRange(2, 4));
+            CvMat _dpdk = CvMat(_Ji.colRange(4, NINTRINSIC));
+            CvMat _dpdo = CvMat(_Jo.colRange(0, maxPoints * 3));
+            CvMat _mp = CvMat(_err.reshape(2, 1));
 
             if (calcJ) {
                 projectPoints2(&_Mi, &_ri, &_ti, &matA, &_k, &_mp, &_dpdr,
@@ -1614,13 +1614,13 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         _objectPoints, _imagePoints, noArray(), objPt, imgPt, 0, npoints);
     Mat newObjPt = _newObjPoints.getMat();
     newObjPt.create(1, objPt.checkVector(3, CV_32F), CV_32FC3);
-    CvMat c_objPt = cvMat(objPt), c_imgPt = cvMat(imgPt),
-          c_npoints = cvMat(npoints);
-    CvMat c_cameraMatrix = cvMat(cameraMatrix),
-          c_distCoeffs = cvMat(distCoeffs);
-    CvMat c_rvecM = cvMat(rvecM), c_tvecM = cvMat(tvecM),
-          c_stdDev = cvMat(stdDeviationsM), c_errors = cvMat(errorsM);
-    CvMat c_newObjPt = cvMat(newObjPt);
+    CvMat c_objPt = CvMat(objPt), c_imgPt = CvMat(imgPt),
+          c_npoints = CvMat(npoints);
+    CvMat c_cameraMatrix = CvMat(cameraMatrix),
+          c_distCoeffs = CvMat(distCoeffs);
+    CvMat c_rvecM = CvMat(rvecM), c_tvecM = CvMat(tvecM),
+          c_stdDev = CvMat(stdDeviationsM), c_errors = CvMat(errorsM);
+    CvMat c_newObjPt = CvMat(newObjPt);
 
     double reprojErr = calibrateCamera2Internal(&c_objPt, &c_imgPt,
         &c_npoints, CvSize(imageSize), _fixedObjPt, &c_cameraMatrix,
