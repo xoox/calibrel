@@ -32,20 +32,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+include_directories(include)
+
 aux_source_directory("src" LIBSRCALL)
 add_library(${PROJECT_NAME} STATIC ${LIBSRCALL})
-target_include_directories(${PROJECT_NAME} PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>)
 target_link_libraries(${PROJECT_NAME} INTERFACE ${OpenCV_LIBS})
 
 if (BUILD_TESTS)
     enable_testing()
-    link_libraries(${PROJECT_NAME})
     aux_source_directory("test" TMVTESTSRC)
     foreach (PERSRC ${TMVTESTSRC})
         string(REGEX REPLACE "test/(test_.*)\.cpp" "\\1" PERTGT ${PERSRC})
         add_executable(${PERTGT} ${PERSRC})
+        add_dependencies(${PERTGT} ${PROJECT_NAME})
+        target_link_libraries(${PERTGT} PRIVATE ${PROJECT_NAME})
     endforeach (PERSRC)
 endif(BUILD_TESTS)
 
@@ -63,6 +63,7 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION include
     )
 
 #-- Add an Option to toggle the generation of the API documentation
