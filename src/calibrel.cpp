@@ -1598,6 +1598,17 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
             tvecM = _tvecs.getMat();
     }
 
+    if (stddev_needed || stddev_ext_needed) {
+        int maxPoints = 0;
+        for (int i = 0; i < nimages; i++) {
+            int ni = npoints.at<short>(i);
+            maxPoints = MAX(maxPoints, ni);
+        }
+
+        stdDeviationsM.create(
+            nimages * 6 + CV_CALIB_NINTRINSIC + maxPoints * 3, 1, CV_64F);
+    }
+
     if (errors_needed) {
         _perViewErrors.create(nimages, 1, CV_64F);
         errorsM = _perViewErrors.getMat();
@@ -1618,17 +1629,6 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         &c_newObjPt, rvecs_needed ? &c_rvecM : NULL,
         tvecs_needed ? &c_tvecM : NULL, stddev_needed ? &c_stdDev : NULL,
         errors_needed ? &c_errors : NULL, flags, criteria);
-
-    if (stddev_needed || stddev_ext_needed) {
-        int maxPoints = 0;
-        for (int i = 0; i < nimages; i++) {
-            int ni = npoints.at<short>(i);
-            maxPoints = MAX(maxPoints, ni);
-        }
-
-        stdDeviationsM.create(
-            nimages * 6 + CV_CALIB_NINTRINSIC + maxPoints * 3, 1, CV_64F);
-    }
 
     if (stddev_needed) {
         stdDeviationsIntrinsics.create(CV_CALIB_NINTRINSIC, 1, CV_64F);
