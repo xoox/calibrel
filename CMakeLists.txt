@@ -16,8 +16,7 @@ OPTION(BUILD_TESTS "Enable testing" ON)
 #------------------------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
-
-include_directories("include")
+# set(CMAKE_POSITION_INDEPENDENT_CODE YES)
 
 # Compiler 
 if (WIN32)
@@ -35,7 +34,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 aux_source_directory("src" LIBSRCALL)
 add_library(${PROJECT_NAME} STATIC ${LIBSRCALL})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_link_libraries(${PROJECT_NAME} INTERFACE ${OpenCV_LIBS})
 
 if (BUILD_TESTS)
     enable_testing()
@@ -94,14 +96,10 @@ endif(BUILD_DOCUMENTATION)
 #-----------------------------------------------------------------------
 include(CMakePackageConfigHelpers)
 
-string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
 configure_package_config_file(
     cmake/package-config.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-    PATH_VARS
-    CMAKE_INSTALL_INCLUDEDIR
-    CMAKE_INSTALL_LIBDIR
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
     )
 
@@ -118,8 +116,5 @@ install(
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
     )
 
-export(TARGETS ${PROJECT_NAME} FILE ${PROJECT_NAME}Targets.cmake)
-export(PACKAGE ${PROJECT_NAME})
-
-install(EXPORT ${PROJECT_NAME}Targets
+install(EXPORT ${PROJECT_NAME}Targets NAMESPACE ${PROJECT_NAME}::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
