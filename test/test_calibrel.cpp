@@ -60,6 +60,7 @@ public:
 
            << "Write_DetectedFeaturePoints" << writePoints
            << "Write_extrinsicParameters" << writeExtrinsics
+           << "Write_gridPoints" << writeGrid
            << "Write_outputFileName" << outputFileName
 
            << "Show_UndistortedImage" << showUndistorsed
@@ -77,6 +78,7 @@ public:
         node["Calibrate_FixAspectRatio"] >> aspectRatio;
         node["Write_DetectedFeaturePoints"] >> writePoints;
         node["Write_extrinsicParameters"] >> writeExtrinsics;
+        node["Write_gridPoints"] >> writeGrid;
         node["Write_outputFileName"] >> outputFileName;
         node["Calibrate_AssumeZeroTangentialDistortion"]
             >> calibZeroTangentDist;
@@ -241,6 +243,7 @@ public:
     int delay; // In case of a video input
     bool writePoints; // Write detected feature points
     bool writeExtrinsics; // Write extrinsic parameters
+    bool writeGrid; // Write refined 3D target grid points
     bool calibZeroTangentDist; // Assume zero tangential distortion
     bool calibFixPrincipalPoint; // Fix the principal point at the center
     bool flipVertical; // Flip the captured images around the horizontal axis
@@ -584,10 +587,11 @@ static void calcBoardCornerPositions(Size boardSize, float squareSize,
     }
 }
 //! [board_corners]
-static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
-    Mat& distCoeffs, vector<vector<Point2f> > imagePoints, vector<Mat>& rvecs,
-    vector<Mat>& tvecs, vector<float>& reprojErrs, double& totalAvgErr,
-    float grid_width, CALIB_MODE calib_mode = DLR11)
+static bool runCalibration(Settings& s, Size& imageSize, float grid_width,
+    Mat& cameraMatrix, Mat& distCoeffs, vector<vector<Point2f> > imagePoints,
+    vector<Mat>& rvecs, vector<Mat>& tvecs, vector<float>& reprojErrs,
+    double& totalAvgErr, vector<Point3f>& newObjPoints,
+    CALIB_MODE calib_mode = DLR11)
 {
     //! [fixed_aspect]
     cameraMatrix = Mat::eye(3, 3, CV_64F);
@@ -608,7 +612,6 @@ static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
     // Find intrinsic and extrinsic camera parameters
     double rms;
 
-    vector<Point3f> newObjPoints = objectPoints;
     vector<vector<Point3f> > objectPointsArray(
         imagePoints.size(), objectPoints);
     if (s.useFisheye) {
@@ -682,7 +685,8 @@ static bool runCalibration(Settings& s, Size& imageSize, Mat& cameraMatrix,
 static void saveCameraParams(Settings& s, Size& imageSize, Mat& cameraMatrix,
     Mat& distCoeffs, const vector<Mat>& rvecs, const vector<Mat>& tvecs,
     const vector<float>& reprojErrs,
-    const vector<vector<Point2f> >& imagePoints, double totalAvgErr)
+    const vector<vector<Point2f> >& imagePoints, double totalAvgErr,
+    vector<Point3f> newObjPoints)
 {
     FileStorage fs(s.outputFileName, FileStorage::WRITE);
 
@@ -791,6 +795,10 @@ static void saveCameraParams(Settings& s, Size& imageSize, Mat& cameraMatrix,
         }
         fs << "image_points" << imagePtMat;
     }
+
+    if (s.writeGrid && !newObjPoints.empty()) {
+        fs << "grid_points" << newObjPoints;
+    }
 }
 
 //! [run_and_save]
@@ -802,15 +810,16 @@ bool runCalibrationAndSave(Settings& s, Size imageSize, Mat& cameraMatrix,
     vector<float> reprojErrs;
     double totalAvgErr = 0;
 
-    bool ok
-        = runCalibration(s, imageSize, cameraMatrix, distCoeffs, imagePoints,
-            rvecs, tvecs, reprojErrs, totalAvgErr, grid_width, calib_mode);
+    vector<Point3f> newObjPoints;
+    bool ok = runCalibration(s, imageSize, grid_width, cameraMatrix,
+        distCoeffs, imagePoints, rvecs, tvecs, reprojErrs, totalAvgErr,
+        newObjPoints, calib_mode);
     cout << (ok ? "Calibration succeeded" : "Calibration failed")
          << ". avg re projection error = " << totalAvgErr << endl;
 
     if (ok)
         saveCameraParams(s, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs,
-            reprojErrs, imagePoints, totalAvgErr);
+            reprojErrs, imagePoints, totalAvgErr, newObjPoints);
     return ok;
 }
 //! [run_and_save]
