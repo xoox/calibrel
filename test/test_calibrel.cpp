@@ -296,7 +296,7 @@ int main(int argc, char* argv[])
           "{mode           |0          | calibration method selection  }"
           "{d              |           | actual distance between top-left "
           "and top-right corners of the calibration grid }"
-          "{winSize        |9          | Half of search window         }";
+          "{winSize        |7          | Half of search window         }";
     CommandLineParser parser(argc, argv, keys);
     parser.about("camera calibration test program");
     if (!parser.check()) {
