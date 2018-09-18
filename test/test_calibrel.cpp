@@ -612,6 +612,7 @@ static bool runCalibration(Settings& s, Size& imageSize, float grid_width,
     // Find intrinsic and extrinsic camera parameters
     double rms;
 
+    newObjPoints = objectPoints;
     vector<vector<Point3f> > objectPointsArray(
         imagePoints.size(), objectPoints);
     if (s.useFisheye) {
