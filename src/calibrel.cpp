@@ -1549,7 +1549,8 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
     InputOutputArray _distCoeffs, OutputArrayOfArrays _rvecs,
     OutputArrayOfArrays _tvecs, OutputArray _newObjPoints,
     OutputArray stdDeviationsIntrinsics, OutputArray stdDeviationsExtrinsics,
-    OutputArray _perViewErrors, int flags, TermCriteria criteria)
+    OutputArray stdDeviationsObjectPoints, OutputArray _perViewErrors,
+    int flags, TermCriteria criteria)
 {
     int rtype = CV_64F;
     Mat cameraMatrix = _cameraMatrix.getMat();
@@ -1572,6 +1573,7 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
          stddev_needed = stdDeviationsIntrinsics.needed(),
          errors_needed = _perViewErrors.needed(),
          stddev_ext_needed = stdDeviationsExtrinsics.needed();
+    bool stddev_obj_needed = stdDeviationsObjectPoints.needed();
 
     bool rvecs_mat_vec = _rvecs.isMatVector();
     bool tvecs_mat_vec = _tvecs.isMatVector();
@@ -1594,8 +1596,10 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
             tvecM = _tvecs.getMat();
     }
 
-    if (stddev_needed || stddev_ext_needed) {
-        int maxPoints = 0;
+    bool stddev_any_needed
+        = stddev_needed || stddev_ext_needed || stddev_obj_needed;
+    int maxPoints = 0;
+    if (stddev_any_needed) {
         for (int i = 0; i < nimages; i++) {
             int ni = npoints.at<short>(i);
             maxPoints = MAX(maxPoints, ni);
@@ -1625,7 +1629,7 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
     double reprojErr = calibrateCamera2Internal(&c_objPt, &c_imgPt,
         &c_npoints, CvSize(imageSize), _fixedObjPt, &c_cameraMatrix,
         &c_distCoeffs, &c_newObjPt, rvecs_needed ? &c_rvecM : NULL,
-        tvecs_needed ? &c_tvecM : NULL, stddev_needed ? &c_stdDev : NULL,
+        tvecs_needed ? &c_tvecM : NULL, stddev_any_needed ? &c_stdDev : NULL,
         errors_needed ? &c_errors : NULL, flags, CvTermCriteria(criteria));
 
     if (stddev_needed) {
@@ -1641,6 +1645,14 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         std::memcpy(stdDeviationsExtrinsicsMat.ptr(),
             stdDeviationsM.ptr() + CV_CALIB_NINTRINSIC * sizeof(double),
             nimages * 6 * sizeof(double));
+    }
+
+    if (stddev_obj_needed) {
+        stdDeviationsObjectPoints.create(maxPoints * 3, 1, CV_64F);
+        Mat stdDeviationsObjectPointsMat = stdDeviationsObjectPoints.getMat();
+        std::memcpy(stdDeviationsObjectPointsMat.ptr(), stdDeviationsM.ptr()
+                + (CV_CALIB_NINTRINSIC + nimages * 6) * sizeof(double),
+            maxPoints * 3 * sizeof(double));
     }
 
     // overly complicated and inefficient rvec/ tvec handling to support
@@ -1673,7 +1685,8 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
 {
     return calibrateCamera(_imagePoints, imageSize, _objectPoints,
         _fixedObjPt, _cameraMatrix, _distCoeffs, _rvecs, _tvecs,
-        _newObjPoints, noArray(), noArray(), noArray(), flags, criteria);
+        _newObjPoints, noArray(), noArray(), noArray(), noArray(), flags,
+        criteria);
 }
 
 } /* end of namespace calrel */

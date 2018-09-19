@@ -120,6 +120,10 @@ using namespace cv;
     \f$(R_1, T_1, \dotsc , R_M, T_M)\f$ where M is number of pattern
     views, \f$R_i, T_i\f$ are concatenated 1x3 vectors.
 
+    \param stdDeviationsObjectPoints Output vector of standard
+    deviations estimated for refined coordinates of calibration pattern
+    points. It has the same size and order as objectPoints vector.
+
     \param perViewErrors Output vector of the RMS re-projection error
     estimated for each pattern view.
 
@@ -214,12 +218,13 @@ double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
     InputOutputArray distCoeffs, OutputArrayOfArrays rvecs,
     OutputArrayOfArrays tvecs, OutputArray newObjPoints,
     OutputArray stdDeviationsIntrinsics, OutputArray stdDeviationsExtrinsics,
-    OutputArray perViewErrors, int flags = 0,
+    OutputArray stdDeviationsObjectPoints, OutputArray perViewErrors,
+    int flags = 0,
     TermCriteria criteria = TermCriteria(
         TermCriteria::COUNT + TermCriteria::EPS, 60, DBL_EPSILON * 30));
 
 /*!
-    \overload 
+    \overload
  */
 double calibrateCamera(InputArrayOfArrays imagePoints, Size imageSize,
     InputArray objectPoints, int fixedObjPt, InputOutputArray cameraMatrix,
