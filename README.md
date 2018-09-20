@@ -8,6 +8,10 @@ In Proceedings of the IEEE International Conference on Computer Vision
 (ICCV 2011), 1st IEEE Workshop on Challenges and Opportunities in Robot
 Perception, Barcelona, Spain, pp.  1068-1075, November 2011.
 
+This implementation was validated against [DLR CalDe and DLR
+CalLab](http://www.robotic.dlr.de/callab/), a remarkable camera
+calibration toolbox, which already includes this method.
+
 The code is largely copied from OpenCV's implementation.
 
 #### How to build
