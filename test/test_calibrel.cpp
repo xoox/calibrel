@@ -292,7 +292,6 @@ bool runCalibrationAndSave(Settings& s, Size imageSize, Mat& cameraMatrix,
 
 int main(int argc, char* argv[])
 {
-    help();
     const String keys
         = "{help h usage ? |           | print this message            }"
           "{@set           |default.xml| input setting file            }"
@@ -308,6 +307,7 @@ int main(int argc, char* argv[])
     }
 
     if (parser.has("help")) {
+        help();
         parser.printMessage();
         return 0;
     }
