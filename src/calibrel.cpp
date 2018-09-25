@@ -1608,4 +1608,593 @@ double calibrateCamera(InputArrayOfArrays _imagePoints, Size imageSize,
         criteria);
 }
 
+/////////////////////////// Stereo Calibration ///////////////////////////////
+
+static int dbCmp(const void* _a, const void* _b)
+{
+    double a = *(const double*)_a;
+    double b = *(const double*)_b;
+
+    return (a > b) - (a < b);
+}
+
+static double stereoCalibrateImpl(const CvMat* _objectPoints,
+    const CvMat* _imagePoints1, const CvMat* _imagePoints2,
+    const CvMat* _npoints, CvMat* _cameraMatrix1, CvMat* _distCoeffs1,
+    CvMat* _cameraMatrix2, CvMat* _distCoeffs2, CvSize imageSize, CvMat* matR,
+    CvMat* matT, CvMat* matE, CvMat* matF, CvMat* perViewErr, int flags,
+    CvTermCriteria termCrit)
+{
+    const int NINTRINSIC = 18;
+    Ptr<CvMat> npoints, imagePoints[2], objectPoints, RT0;
+    double reprojErr = 0;
+
+    double A[2][9], dk[2][14] = { { 0 } }, rlr[9];
+    CvMat K[2], Dist[2], om_LR, T_LR;
+    CvMat R_LR = cvMat(3, 3, CV_64F, rlr);
+    int i, k, p, ni = 0, ofs, nimages, pointsTotal, maxPoints = 0;
+    int nparams;
+    bool recomputeIntrinsics = false;
+    double aspectRatio[2] = { 0 };
+
+    CV_Assert(CV_IS_MAT(_imagePoints1) && CV_IS_MAT(_imagePoints2)
+        && CV_IS_MAT(_objectPoints) && CV_IS_MAT(_npoints) && CV_IS_MAT(matR)
+        && CV_IS_MAT(matT));
+
+    CV_Assert(CV_ARE_TYPES_EQ(_imagePoints1, _imagePoints2)
+        && CV_ARE_DEPTHS_EQ(_imagePoints1, _objectPoints));
+
+    CV_Assert((_npoints->cols == 1 || _npoints->rows == 1)
+        && CV_MAT_TYPE(_npoints->type) == CV_32SC1);
+
+    nimages = _npoints->cols + _npoints->rows - 1;
+    npoints.reset(
+        cvCreateMat(_npoints->rows, _npoints->cols, _npoints->type));
+    cvCopy(_npoints, npoints);
+
+    for (i = 0, pointsTotal = 0; i < nimages; i++) {
+        maxPoints = MAX(maxPoints, npoints->data.i[i]);
+        pointsTotal += npoints->data.i[i];
+    }
+
+    objectPoints.reset(cvCreateMat(_objectPoints->rows, _objectPoints->cols,
+        CV_64FC(CV_MAT_CN(_objectPoints->type))));
+    cvConvert(_objectPoints, objectPoints);
+    cvReshape(objectPoints, objectPoints, 3, 1);
+
+    for (k = 0; k < 2; k++) {
+        const CvMat* points = k == 0 ? _imagePoints1 : _imagePoints2;
+        const CvMat* cameraMatrix = k == 0 ? _cameraMatrix1 : _cameraMatrix2;
+        const CvMat* distCoeffs = k == 0 ? _distCoeffs1 : _distCoeffs2;
+
+        int cn = CV_MAT_CN(_imagePoints1->type);
+        CV_Assert((CV_MAT_DEPTH(_imagePoints1->type) == CV_32F
+                      || CV_MAT_DEPTH(_imagePoints1->type) == CV_64F)
+            && ((_imagePoints1->rows == pointsTotal
+                    && _imagePoints1->cols * cn == 2)
+                   || (_imagePoints1->rows == 1
+                          && _imagePoints1->cols == pointsTotal && cn == 2)));
+
+        K[k] = cvMat(3, 3, CV_64F, A[k]);
+        Dist[k] = cvMat(1, 14, CV_64F, dk[k]);
+
+        imagePoints[k].reset(cvCreateMat(
+            points->rows, points->cols, CV_64FC(CV_MAT_CN(points->type))));
+        cvConvert(points, imagePoints[k]);
+        cvReshape(imagePoints[k], imagePoints[k], 2, 1);
+
+        if (flags & (CALIB_FIX_INTRINSIC | CALIB_USE_INTRINSIC_GUESS
+                        | CALIB_FIX_ASPECT_RATIO | CALIB_FIX_FOCAL_LENGTH))
+            cvConvert(cameraMatrix, &K[k]);
+
+        if (flags
+            & (CALIB_FIX_INTRINSIC | CALIB_USE_INTRINSIC_GUESS | CALIB_FIX_K1
+                  | CALIB_FIX_K2 | CALIB_FIX_K3 | CALIB_FIX_K4 | CALIB_FIX_K5
+                  | CALIB_FIX_K6 | CALIB_FIX_TANGENT_DIST)) {
+            CvMat tdist = cvMat(distCoeffs->rows, distCoeffs->cols,
+                CV_MAKETYPE(CV_64F, CV_MAT_CN(distCoeffs->type)),
+                Dist[k].data.db);
+            cvConvert(distCoeffs, &tdist);
+        }
+
+        if (!(flags & (CALIB_FIX_INTRINSIC | CALIB_USE_INTRINSIC_GUESS))) {
+            cvCalibrateCamera2(objectPoints, imagePoints[k], npoints,
+                imageSize, &K[k], &Dist[k], NULL, NULL, flags);
+        }
+    }
+
+    if (flags & CALIB_SAME_FOCAL_LENGTH) {
+        static const int avg_idx[] = { 0, 4, 2, 5, -1 };
+        for (k = 0; avg_idx[k] >= 0; k++)
+            A[0][avg_idx[k]] = A[1][avg_idx[k]]
+                = (A[0][avg_idx[k]] + A[1][avg_idx[k]]) * 0.5;
+    }
+
+    if (flags & CALIB_FIX_ASPECT_RATIO) {
+        for (k = 0; k < 2; k++)
+            aspectRatio[k] = A[k][0] / A[k][4];
+    }
+
+    recomputeIntrinsics = (flags & CALIB_FIX_INTRINSIC) == 0;
+
+    Mat err(maxPoints * 2, 1, CV_64F);
+    Mat Je(maxPoints * 2, 6, CV_64F);
+    Mat J_LR(maxPoints * 2, 6, CV_64F);
+    Mat Ji(maxPoints * 2, NINTRINSIC, CV_64F, Scalar(0));
+
+    // we optimize for the inter-camera R(3),t(3), then, optionally,
+    // for intrinisic parameters of each camera ((fx,fy,cx,cy,k1,k2,p1,p2) ~ 8
+    // parameters).
+    nparams = 6 * (nimages + 1) + (recomputeIntrinsics ? NINTRINSIC * 2 : 0);
+
+    CvLevMarq solver(nparams, 0, termCrit);
+
+    if (flags & CALIB_USE_LU) {
+        solver.solveMethod = DECOMP_LU;
+    }
+
+    if (recomputeIntrinsics) {
+        uchar* imask = solver.mask->data.ptr + nparams - NINTRINSIC * 2;
+        if (!(flags & CALIB_RATIONAL_MODEL))
+            flags |= CALIB_FIX_K4 | CALIB_FIX_K5 | CALIB_FIX_K6;
+        if (!(flags & CALIB_THIN_PRISM_MODEL))
+            flags |= CALIB_FIX_S1_S2_S3_S4;
+        if (!(flags & CALIB_TILTED_MODEL))
+            flags |= CALIB_FIX_TAUX_TAUY;
+        if (flags & CALIB_FIX_ASPECT_RATIO)
+            imask[0] = imask[NINTRINSIC] = 0;
+        if (flags & CALIB_FIX_FOCAL_LENGTH)
+            imask[0] = imask[1] = imask[NINTRINSIC] = imask[NINTRINSIC + 1]
+                = 0;
+        if (flags & CALIB_FIX_PRINCIPAL_POINT)
+            imask[2] = imask[3] = imask[NINTRINSIC + 2]
+                = imask[NINTRINSIC + 3] = 0;
+        if (flags & (CALIB_ZERO_TANGENT_DIST | CALIB_FIX_TANGENT_DIST))
+            imask[6] = imask[7] = imask[NINTRINSIC + 6]
+                = imask[NINTRINSIC + 7] = 0;
+        if (flags & CALIB_FIX_K1)
+            imask[4] = imask[NINTRINSIC + 4] = 0;
+        if (flags & CALIB_FIX_K2)
+            imask[5] = imask[NINTRINSIC + 5] = 0;
+        if (flags & CALIB_FIX_K3)
+            imask[8] = imask[NINTRINSIC + 8] = 0;
+        if (flags & CALIB_FIX_K4)
+            imask[9] = imask[NINTRINSIC + 9] = 0;
+        if (flags & CALIB_FIX_K5)
+            imask[10] = imask[NINTRINSIC + 10] = 0;
+        if (flags & CALIB_FIX_K6)
+            imask[11] = imask[NINTRINSIC + 11] = 0;
+        if (flags & CALIB_FIX_S1_S2_S3_S4) {
+            imask[12] = imask[NINTRINSIC + 12] = 0;
+            imask[13] = imask[NINTRINSIC + 13] = 0;
+            imask[14] = imask[NINTRINSIC + 14] = 0;
+            imask[15] = imask[NINTRINSIC + 15] = 0;
+        }
+        if (flags & CALIB_FIX_TAUX_TAUY) {
+            imask[16] = imask[NINTRINSIC + 16] = 0;
+            imask[17] = imask[NINTRINSIC + 17] = 0;
+        }
+    }
+
+    // storage for initial [om(R){i}|t{i}] (in order to compute the median for
+    // each component)
+    RT0.reset(cvCreateMat(6, nimages, CV_64F));
+    /*
+       Compute initial estimate of pose
+       For each image, compute:
+          R(om) is the rotation matrix of om
+          om(R) is the rotation vector of R
+          R_ref = R(om_right) * R(om_left)'
+          T_ref_list = [T_ref_list; T_right - R_ref * T_left]
+          om_ref_list = {om_ref_list; om(R_ref)]
+       om = median(om_ref_list)
+       T = median(T_ref_list)
+    */
+    for (i = ofs = 0; i < nimages; ofs += ni, i++) {
+        ni = npoints->data.i[i];
+        CvMat objpt_i;
+        double _om[2][3], r[2][9], t[2][3];
+        CvMat om[2], R[2], T[2], imgpt_i[2];
+
+        objpt_i = cvMat(1, ni, CV_64FC3, objectPoints->data.db + ofs * 3);
+        for (k = 0; k < 2; k++) {
+            imgpt_i[k]
+                = cvMat(1, ni, CV_64FC2, imagePoints[k]->data.db + ofs * 2);
+            om[k] = cvMat(3, 1, CV_64F, _om[k]);
+            R[k] = cvMat(3, 3, CV_64F, r[k]);
+            T[k] = cvMat(3, 1, CV_64F, t[k]);
+
+            cvFindExtrinsicCameraParams2(
+                &objpt_i, &imgpt_i[k], &K[k], &Dist[k], &om[k], &T[k]);
+            cvRodrigues2(&om[k], &R[k]);
+            if (k == 0) {
+                // save initial om_left and T_left
+                solver.param->data.db[(i + 1) * 6] = _om[0][0];
+                solver.param->data.db[(i + 1) * 6 + 1] = _om[0][1];
+                solver.param->data.db[(i + 1) * 6 + 2] = _om[0][2];
+                solver.param->data.db[(i + 1) * 6 + 3] = t[0][0];
+                solver.param->data.db[(i + 1) * 6 + 4] = t[0][1];
+                solver.param->data.db[(i + 1) * 6 + 5] = t[0][2];
+            }
+        }
+        cvGEMM(&R[1], &R[0], 1, 0, 0, &R[0], CV_GEMM_B_T);
+        cvGEMM(&R[0], &T[0], -1, &T[1], 1, &T[1]);
+        cvRodrigues2(&R[0], &T[0]);
+        RT0->data.db[i] = t[0][0];
+        RT0->data.db[i + nimages] = t[0][1];
+        RT0->data.db[i + nimages * 2] = t[0][2];
+        RT0->data.db[i + nimages * 3] = t[1][0];
+        RT0->data.db[i + nimages * 4] = t[1][1];
+        RT0->data.db[i + nimages * 5] = t[1][2];
+    }
+
+    if (flags & CALIB_USE_EXTRINSIC_GUESS) {
+        Vec3d R, T;
+        cvarrToMat(matT).convertTo(T, CV_64F);
+
+        if (matR->rows == 3 && matR->cols == 3)
+            Rodrigues(cvarrToMat(matR), R);
+        else
+            cvarrToMat(matR).convertTo(R, CV_64F);
+
+        solver.param->data.db[0] = R[0];
+        solver.param->data.db[1] = R[1];
+        solver.param->data.db[2] = R[2];
+        solver.param->data.db[3] = T[0];
+        solver.param->data.db[4] = T[1];
+        solver.param->data.db[5] = T[2];
+    } else {
+        // find the medians and save the first 6 parameters
+        for (i = 0; i < 6; i++) {
+            qsort(RT0->data.db + i * nimages, nimages,
+                CV_ELEM_SIZE(RT0->type), dbCmp);
+            solver.param->data.db[i] = nimages % 2 != 0
+                ? RT0->data.db[i * nimages + nimages / 2]
+                : (RT0->data.db[i * nimages + nimages / 2 - 1]
+                      + RT0->data.db[i * nimages + nimages / 2])
+                    * 0.5;
+        }
+    }
+
+    if (recomputeIntrinsics)
+        for (k = 0; k < 2; k++) {
+            double* iparam
+                = solver.param->data.db + (nimages + 1) * 6 + k * NINTRINSIC;
+            if (flags & CALIB_ZERO_TANGENT_DIST)
+                dk[k][2] = dk[k][3] = 0;
+            iparam[0] = A[k][0];
+            iparam[1] = A[k][4];
+            iparam[2] = A[k][2];
+            iparam[3] = A[k][5];
+            iparam[4] = dk[k][0];
+            iparam[5] = dk[k][1];
+            iparam[6] = dk[k][2];
+            iparam[7] = dk[k][3];
+            iparam[8] = dk[k][4];
+            iparam[9] = dk[k][5];
+            iparam[10] = dk[k][6];
+            iparam[11] = dk[k][7];
+            iparam[12] = dk[k][8];
+            iparam[13] = dk[k][9];
+            iparam[14] = dk[k][10];
+            iparam[15] = dk[k][11];
+            iparam[16] = dk[k][12];
+            iparam[17] = dk[k][13];
+        }
+
+    om_LR = cvMat(3, 1, CV_64F, solver.param->data.db);
+    T_LR = cvMat(3, 1, CV_64F, solver.param->data.db + 3);
+
+    for (;;) {
+        const CvMat* param = 0;
+        CvMat *JtJ = 0, *JtErr = 0;
+        double* _errNorm = 0;
+        double _omR[3], _tR[3];
+        double _dr3dr1[9], _dr3dr2[9], /*_dt3dr1[9],*/ _dt3dr2[9], _dt3dt1[9],
+            _dt3dt2[9];
+        CvMat dr3dr1 = cvMat(3, 3, CV_64F, _dr3dr1);
+        CvMat dr3dr2 = cvMat(3, 3, CV_64F, _dr3dr2);
+        // CvMat dt3dr1 = cvMat(3, 3, CV_64F, _dt3dr1);
+        CvMat dt3dr2 = cvMat(3, 3, CV_64F, _dt3dr2);
+        CvMat dt3dt1 = cvMat(3, 3, CV_64F, _dt3dt1);
+        CvMat dt3dt2 = cvMat(3, 3, CV_64F, _dt3dt2);
+        CvMat om[2], T[2], imgpt_i[2];
+
+        if (!solver.updateAlt(param, JtJ, JtErr, _errNorm))
+            break;
+        reprojErr = 0;
+
+        cvRodrigues2(&om_LR, &R_LR);
+        om[1] = cvMat(3, 1, CV_64F, _omR);
+        T[1] = cvMat(3, 1, CV_64F, _tR);
+
+        if (recomputeIntrinsics) {
+            double* iparam = solver.param->data.db + (nimages + 1) * 6;
+            double* ipparam = solver.prevParam->data.db + (nimages + 1) * 6;
+
+            if (flags & CALIB_SAME_FOCAL_LENGTH) {
+                iparam[NINTRINSIC] = iparam[0];
+                iparam[NINTRINSIC + 1] = iparam[1];
+                ipparam[NINTRINSIC] = ipparam[0];
+                ipparam[NINTRINSIC + 1] = ipparam[1];
+            }
+            if (flags & CALIB_FIX_ASPECT_RATIO) {
+                iparam[0] = iparam[1] * aspectRatio[0];
+                iparam[NINTRINSIC] = iparam[NINTRINSIC + 1] * aspectRatio[1];
+                ipparam[0] = ipparam[1] * aspectRatio[0];
+                ipparam[NINTRINSIC]
+                    = ipparam[NINTRINSIC + 1] * aspectRatio[1];
+            }
+            for (k = 0; k < 2; k++) {
+                A[k][0] = iparam[k * NINTRINSIC + 0];
+                A[k][4] = iparam[k * NINTRINSIC + 1];
+                A[k][2] = iparam[k * NINTRINSIC + 2];
+                A[k][5] = iparam[k * NINTRINSIC + 3];
+                dk[k][0] = iparam[k * NINTRINSIC + 4];
+                dk[k][1] = iparam[k * NINTRINSIC + 5];
+                dk[k][2] = iparam[k * NINTRINSIC + 6];
+                dk[k][3] = iparam[k * NINTRINSIC + 7];
+                dk[k][4] = iparam[k * NINTRINSIC + 8];
+                dk[k][5] = iparam[k * NINTRINSIC + 9];
+                dk[k][6] = iparam[k * NINTRINSIC + 10];
+                dk[k][7] = iparam[k * NINTRINSIC + 11];
+                dk[k][8] = iparam[k * NINTRINSIC + 12];
+                dk[k][9] = iparam[k * NINTRINSIC + 13];
+                dk[k][10] = iparam[k * NINTRINSIC + 14];
+                dk[k][11] = iparam[k * NINTRINSIC + 15];
+                dk[k][12] = iparam[k * NINTRINSIC + 16];
+                dk[k][13] = iparam[k * NINTRINSIC + 17];
+            }
+        }
+
+        for (i = ofs = 0; i < nimages; ofs += ni, i++) {
+            ni = npoints->data.i[i];
+            CvMat objpt_i;
+
+            om[0] = cvMat(3, 1, CV_64F, solver.param->data.db + (i + 1) * 6);
+            T[0] = cvMat(
+                3, 1, CV_64F, solver.param->data.db + (i + 1) * 6 + 3);
+
+            if (JtJ || JtErr)
+                cvComposeRT(&om[0], &T[0], &om_LR, &T_LR, &om[1], &T[1],
+                    &dr3dr1, 0, &dr3dr2, 0, 0, &dt3dt1, &dt3dr2, &dt3dt2);
+            else
+                cvComposeRT(&om[0], &T[0], &om_LR, &T_LR, &om[1], &T[1]);
+
+            objpt_i = cvMat(1, ni, CV_64FC3, objectPoints->data.db + ofs * 3);
+            err.resize(ni * 2);
+            Je.resize(ni * 2);
+            J_LR.resize(ni * 2);
+            Ji.resize(ni * 2);
+
+            CvMat tmpimagePoints = cvMat(err.reshape(2, 1));
+            CvMat dpdf = cvMat(Ji.colRange(0, 2));
+            CvMat dpdc = cvMat(Ji.colRange(2, 4));
+            CvMat dpdk = cvMat(Ji.colRange(4, NINTRINSIC));
+            CvMat dpdrot = cvMat(Je.colRange(0, 3));
+            CvMat dpdt = cvMat(Je.colRange(3, 6));
+
+            for (k = 0; k < 2; k++) {
+                imgpt_i[k] = cvMat(
+                    1, ni, CV_64FC2, imagePoints[k]->data.db + ofs * 2);
+
+                if (JtJ || JtErr)
+                    cvProjectPoints2(&objpt_i, &om[k], &T[k], &K[k], &Dist[k],
+                        &tmpimagePoints, &dpdrot, &dpdt, &dpdf, &dpdc, &dpdk,
+                        (flags & CALIB_FIX_ASPECT_RATIO) ? aspectRatio[k]
+                                                         : 0);
+                else
+                    cvProjectPoints2(&objpt_i, &om[k], &T[k], &K[k], &Dist[k],
+                        &tmpimagePoints);
+                cvSub(&tmpimagePoints, &imgpt_i[k], &tmpimagePoints);
+
+                if (solver.state == CvLevMarq::CALC_J) {
+                    int iofs = (nimages + 1) * 6 + k * NINTRINSIC,
+                        eofs = (i + 1) * 6;
+                    assert(JtJ && JtErr);
+
+                    Mat _JtJ(cvarrToMat(JtJ)), _JtErr(cvarrToMat(JtErr));
+
+                    if (k == 1) {
+                        // d(err_{x|y}R) ~ de3
+                        // convert de3/{dr3,dt3} => de3{dr1,dt1} &
+                        // de3{dr2,dt2}
+                        for (p = 0; p < ni * 2; p++) {
+                            CvMat de3dr3 = cvMat(1, 3, CV_64F, Je.ptr(p));
+                            CvMat de3dt3
+                                = cvMat(1, 3, CV_64F, de3dr3.data.db + 3);
+                            CvMat de3dr2 = cvMat(1, 3, CV_64F, J_LR.ptr(p));
+                            CvMat de3dt2
+                                = cvMat(1, 3, CV_64F, de3dr2.data.db + 3);
+                            double _de3dr1[3], _de3dt1[3];
+                            CvMat de3dr1 = cvMat(1, 3, CV_64F, _de3dr1);
+                            CvMat de3dt1 = cvMat(1, 3, CV_64F, _de3dt1);
+
+                            cvMatMul(&de3dr3, &dr3dr1, &de3dr1);
+                            cvMatMul(&de3dt3, &dt3dt1, &de3dt1);
+
+                            cvMatMul(&de3dr3, &dr3dr2, &de3dr2);
+                            cvMatMulAdd(&de3dt3, &dt3dr2, &de3dr2, &de3dr2);
+
+                            cvMatMul(&de3dt3, &dt3dt2, &de3dt2);
+
+                            cvCopy(&de3dr1, &de3dr3);
+                            cvCopy(&de3dt1, &de3dt3);
+                        }
+
+                        _JtJ(Rect(0, 0, 6, 6)) += J_LR.t() * J_LR;
+                        _JtJ(Rect(eofs, 0, 6, 6)) = J_LR.t() * Je;
+                        _JtErr.rowRange(0, 6) += J_LR.t() * err;
+                    }
+
+                    _JtJ(Rect(eofs, eofs, 6, 6)) += Je.t() * Je;
+                    _JtErr.rowRange(eofs, eofs + 6) += Je.t() * err;
+
+                    if (recomputeIntrinsics) {
+                        _JtJ(Rect(iofs, iofs, NINTRINSIC, NINTRINSIC))
+                            += Ji.t() * Ji;
+                        _JtJ(Rect(iofs, eofs, NINTRINSIC, 6)) += Je.t() * Ji;
+                        if (k == 1) {
+                            _JtJ(Rect(iofs, 0, NINTRINSIC, 6))
+                                += J_LR.t() * Ji;
+                        }
+                        _JtErr.rowRange(iofs, iofs + NINTRINSIC)
+                            += Ji.t() * err;
+                    }
+                }
+
+                double viewErr = norm(err, NORM_L2SQR);
+
+                if (perViewErr)
+                    perViewErr->data.db[i * 2 + k] = std::sqrt(viewErr / ni);
+
+                reprojErr += viewErr;
+            }
+        }
+        if (_errNorm)
+            *_errNorm = reprojErr;
+    }
+
+    cvRodrigues2(&om_LR, &R_LR);
+    if (matR->rows == 1 || matR->cols == 1)
+        cvConvert(&om_LR, matR);
+    else
+        cvConvert(&R_LR, matR);
+    cvConvert(&T_LR, matT);
+
+    if (recomputeIntrinsics) {
+        cvConvert(&K[0], _cameraMatrix1);
+        cvConvert(&K[1], _cameraMatrix2);
+
+        for (k = 0; k < 2; k++) {
+            CvMat* distCoeffs = k == 0 ? _distCoeffs1 : _distCoeffs2;
+            CvMat tdist = cvMat(distCoeffs->rows, distCoeffs->cols,
+                CV_MAKETYPE(CV_64F, CV_MAT_CN(distCoeffs->type)),
+                Dist[k].data.db);
+            cvConvert(&tdist, distCoeffs);
+        }
+    }
+
+    if (matE || matF) {
+        double* t = T_LR.data.db;
+        double tx[] = { 0, -t[2], t[1], t[2], 0, -t[0], -t[1], t[0], 0 };
+        CvMat Tx = cvMat(3, 3, CV_64F, tx);
+        double e[9], f[9];
+        CvMat E = cvMat(3, 3, CV_64F, e);
+        CvMat F = cvMat(3, 3, CV_64F, f);
+        cvMatMul(&Tx, &R_LR, &E);
+        if (matE)
+            cvConvert(&E, matE);
+        if (matF) {
+            double ik[9];
+            CvMat iK = cvMat(3, 3, CV_64F, ik);
+            cvInvert(&K[1], &iK);
+            cvGEMM(&iK, &E, 1, 0, 0, &E, CV_GEMM_A_T);
+            cvInvert(&K[0], &iK);
+            cvMatMul(&E, &iK, &F);
+            cvConvertScale(&F, matF, fabs(f[8]) > 0 ? 1. / f[8] : 1);
+        }
+    }
+
+    return std::sqrt(reprojErr / (pointsTotal * 2));
+}
+
+double stereoCalibrate(InputArrayOfArrays _objectPoints,
+    InputArrayOfArrays _imagePoints1, InputArrayOfArrays _imagePoints2,
+    InputOutputArray _cameraMatrix1, InputOutputArray _distCoeffs1,
+    InputOutputArray _cameraMatrix2, InputOutputArray _distCoeffs2,
+    Size imageSize, InputOutputArray _Rmat, InputOutputArray _Tmat,
+    OutputArray _Emat, OutputArray _Fmat, OutputArray _perViewErrors,
+    int flags, TermCriteria criteria)
+{
+    int rtype = CV_64F;
+    Mat cameraMatrix1 = _cameraMatrix1.getMat();
+    Mat cameraMatrix2 = _cameraMatrix2.getMat();
+    Mat distCoeffs1 = _distCoeffs1.getMat();
+    Mat distCoeffs2 = _distCoeffs2.getMat();
+    cameraMatrix1 = prepareCameraMatrix(cameraMatrix1, rtype);
+    cameraMatrix2 = prepareCameraMatrix(cameraMatrix2, rtype);
+    distCoeffs1 = prepareDistCoeffs(distCoeffs1, rtype);
+    distCoeffs2 = prepareDistCoeffs(distCoeffs2, rtype);
+
+    if (!(flags & CALIB_RATIONAL_MODEL) && (!(flags & CALIB_THIN_PRISM_MODEL))
+        && (!(flags & CALIB_TILTED_MODEL))) {
+        distCoeffs1 = distCoeffs1.rows == 1 ? distCoeffs1.colRange(0, 5)
+                                            : distCoeffs1.rowRange(0, 5);
+        distCoeffs2 = distCoeffs2.rows == 1 ? distCoeffs2.colRange(0, 5)
+                                            : distCoeffs2.rowRange(0, 5);
+    }
+
+    if ((flags & CALIB_USE_EXTRINSIC_GUESS) == 0) {
+        _Rmat.create(3, 3, rtype);
+        _Tmat.create(3, 1, rtype);
+    }
+
+    Mat objPt, imgPt, imgPt2, npoints;
+
+    collectCalibrationData(_objectPoints, _imagePoints1, _imagePoints2, objPt,
+        imgPt, &imgPt2, npoints);
+    CvMat c_objPt = cvMat(objPt), c_imgPt = cvMat(imgPt),
+          c_imgPt2 = cvMat(imgPt2), c_npoints = cvMat(npoints);
+    CvMat c_cameraMatrix1 = cvMat(cameraMatrix1),
+          c_distCoeffs1 = cvMat(distCoeffs1);
+    CvMat c_cameraMatrix2 = cvMat(cameraMatrix2),
+          c_distCoeffs2 = cvMat(distCoeffs2);
+    Mat matR_ = _Rmat.getMat(), matT_ = _Tmat.getMat();
+    CvMat c_matR = cvMat(matR_), c_matT = cvMat(matT_), c_matE, c_matF,
+          c_matErr;
+
+    bool E_needed = _Emat.needed(), F_needed = _Fmat.needed(),
+         errors_needed = _perViewErrors.needed();
+
+    Mat matE_, matF_, matErr_;
+    if (E_needed) {
+        _Emat.create(3, 3, rtype);
+        matE_ = _Emat.getMat();
+        c_matE = cvMat(matE_);
+    }
+    if (F_needed) {
+        _Fmat.create(3, 3, rtype);
+        matF_ = _Fmat.getMat();
+        c_matF = cvMat(matF_);
+    }
+
+    if (errors_needed) {
+        int nimages = int(_objectPoints.total());
+        _perViewErrors.create(nimages, 2, CV_64F);
+        matErr_ = _perViewErrors.getMat();
+        c_matErr = cvMat(matErr_);
+    }
+
+    double err = stereoCalibrateImpl(&c_objPt, &c_imgPt, &c_imgPt2,
+        &c_npoints, &c_cameraMatrix1, &c_distCoeffs1, &c_cameraMatrix2,
+        &c_distCoeffs2, cvSize(imageSize), &c_matR, &c_matT,
+        E_needed ? &c_matE : NULL, F_needed ? &c_matF : NULL,
+        errors_needed ? &c_matErr : NULL, flags, cvTermCriteria(criteria));
+
+    cameraMatrix1.copyTo(_cameraMatrix1);
+    cameraMatrix2.copyTo(_cameraMatrix2);
+    distCoeffs1.copyTo(_distCoeffs1);
+    distCoeffs2.copyTo(_distCoeffs2);
+
+    return err;
+}
+
+double stereoCalibrate(InputArrayOfArrays _objectPoints,
+    InputArrayOfArrays _imagePoints1, InputArrayOfArrays _imagePoints2,
+    InputOutputArray _cameraMatrix1, InputOutputArray _distCoeffs1,
+    InputOutputArray _cameraMatrix2, InputOutputArray _distCoeffs2,
+    Size imageSize, OutputArray _Rmat, OutputArray _Tmat, OutputArray _Emat,
+    OutputArray _Fmat, int flags, TermCriteria criteria)
+{
+    Mat Rmat, Tmat;
+    double ret
+        = calrel::stereoCalibrate(_objectPoints, _imagePoints1, _imagePoints2,
+            _cameraMatrix1, _distCoeffs1, _cameraMatrix2, _distCoeffs2,
+            imageSize, Rmat, Tmat, _Emat, _Fmat, noArray(), flags, criteria);
+    Rmat.copyTo(_Rmat);
+    Tmat.copyTo(_Tmat);
+    return ret;
+}
+
 } /* end of namespace calrel */
