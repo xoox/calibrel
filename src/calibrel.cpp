@@ -519,112 +519,35 @@ static void projectPoints2(const CvMat* objectPoints, const CvMat* r_vec,
             }
 
             if (dpdo_p) {
-                double dz_dX = 0;
-                double dz_dY = 0;
-                double dz_dZ = 0;
-                if (z0) {
-                    dz_dX = -z * z * R[6];
-                    dz_dY = -z * z * R[7];
-                    dz_dZ = -z * z * R[8];
+                double dxdo[] = { z * (R[0] - x * z * z0 * R[6]),
+                    z * (R[1] - x * z * z0 * R[7]),
+                    z * (R[2] - x * z * z0 * R[8]) };
+                double dydo[] = { z * (R[3] - y * z * z0 * R[6]),
+                    z * (R[4] - y * z * z0 * R[7]),
+                    z * (R[5] - y * z * z0 * R[8]) };
+                for (j = 0; j < 3; j++) {
+                    double dr2do = 2 * x * dxdo[j] + 2 * y * dydo[j];
+                    double dr4do = 2 * r2 * dr2do;
+                    double dr6do = 3 * r4 * dr2do;
+                    double da1do = 2 * y * dxdo[j] + 2 * x * dydo[j];
+                    double da2do = dr2do + 4 * x * dxdo[j];
+                    double da3do = dr2do + 4 * y * dydo[j];
+                    double dcdist_do
+                        = k[0] * dr2do + k[1] * dr4do + k[4] * dr6do;
+                    double dicdist2_do = -icdist2 * icdist2
+                        * (k[5] * dr2do + k[6] * dr4do + k[7] * dr6do);
+                    double dxd0_do = cdist * icdist2 * dxdo[j]
+                        + x * icdist2 * dcdist_do + x * cdist * dicdist2_do
+                        + k[2] * da1do + k[3] * da2do + k[8] * dr2do
+                        + k[9] * dr4do;
+                    double dyd0_do = cdist * icdist2 * dydo[j]
+                        + y * icdist2 * dcdist_do + y * cdist * dicdist2_do
+                        + k[2] * da3do + k[3] * da1do + k[10] * dr2do
+                        + k[11] * dr4do;
+                    dXdYd = dMatTilt * Vec2d(dxd0_do, dyd0_do);
+                    dpdo_p[i * 3 + j] = fx * dXdYd(0);
+                    dpdo_p[dpdo_step + i * 3 + j] = fy * dXdYd(1);
                 }
-                double dx_dX = z * R[0] + x / z * dz_dX;
-                double dx_dY = z * R[1] + x / z * dz_dY;
-                double dx_dZ = z * R[2] + x / z * dz_dZ;
-                double dy_dX = z * R[3] + y / z * dz_dX;
-                double dy_dY = z * R[4] + y / z * dz_dY;
-                double dy_dZ = z * R[5] + y / z * dz_dZ;
-                double dr2_dX = 2 * x * dx_dX + 2 * y * dy_dX;
-                double dr2_dY = 2 * x * dx_dY + 2 * y * dy_dY;
-                double dr2_dZ = 2 * x * dx_dZ + 2 * y * dy_dZ;
-                double dr4_dX = 2 * r2 * dr2_dX;
-                double dr4_dY = 2 * r2 * dr2_dY;
-                double dr4_dZ = 2 * r2 * dr2_dZ;
-                double dr6_dX = 3 * r4 * dr2_dX;
-                double dr6_dY = 3 * r4 * dr2_dY;
-                double dr6_dZ = 3 * r4 * dr2_dZ;
-                double da1_dX = 2 * y * dx_dX + 2 * x * dy_dX;
-                double da1_dY = 2 * y * dx_dY + 2 * x * dy_dY;
-                double da1_dZ = 2 * y * dx_dZ + 2 * x * dy_dZ;
-                double da2_dX = dr2_dX + 4 * x * dx_dX;
-                double da2_dY = dr2_dY + 4 * x * dx_dY;
-                double da2_dZ = dr2_dZ + 4 * x * dx_dZ;
-                double da3_dX = dr2_dX + 4 * y * dy_dX;
-                double da3_dY = dr2_dY + 4 * y * dy_dY;
-                double da3_dZ = dr2_dZ + 4 * y * dy_dZ;
-                double dcdist_dX
-                    = k[0] * dr2_dX + k[1] * dr4_dX + k[4] * dr6_dX;
-                double dcdist_dY
-                    = k[0] * dr2_dY + k[1] * dr4_dY + k[4] * dr6_dY;
-                double dcdist_dZ
-                    = k[0] * dr2_dZ + k[1] * dr4_dZ + k[4] * dr6_dZ;
-                double dicdist2_dX = -icdist2 * icdist2
-                    * (k[5] * dr2_dX + k[6] * dr4_dX + k[7] * dr6_dX);
-                double dicdist2_dY = -icdist2 * icdist2
-                    * (k[5] * dr2_dY + k[6] * dr4_dY + k[7] * dr6_dY);
-                double dicdist2_dZ = -icdist2 * icdist2
-                    * (k[5] * dr2_dZ + k[6] * dr4_dZ + k[7] * dr6_dZ);
-                double dxd0_dx = cdist * icdist2;
-                double dxd0_dcdist = x * icdist2;
-                double dxd0_dicdist2 = x * cdist;
-                double dyd0_dy = cdist * icdist2;
-                double dyd0_dcdist = y * icdist2;
-                double dyd0_dicdist2 = y * cdist;
-                double dxd0_dX = dxd0_dx * dx_dX + dxd0_dcdist * dcdist_dX
-                    + dxd0_dicdist2 * dicdist2_dX + k[2] * da1_dX
-                    + k[3] * da2_dX + k[8] * dr2_dX + k[9] * dr4_dX;
-                double dxd0_dY = dxd0_dx * dx_dY + dxd0_dcdist * dcdist_dY
-                    + dxd0_dicdist2 * dicdist2_dY + k[2] * da1_dY
-                    + k[3] * da2_dY + k[8] * dr2_dY + k[9] * dr4_dY;
-                double dxd0_dZ = dxd0_dx * dx_dZ + dxd0_dcdist * dcdist_dZ
-                    + dxd0_dicdist2 * dicdist2_dZ + k[2] * da1_dZ
-                    + k[3] * da2_dZ + k[8] * dr2_dZ + k[9] * dr4_dZ;
-                double dyd0_dX = dyd0_dy * dy_dX + dyd0_dcdist * dcdist_dX
-                    + dyd0_dicdist2 * dicdist2_dX + k[2] * da3_dX
-                    + k[3] * da1_dX + k[10] * dr2_dX + k[11] * dr4_dX;
-                double dyd0_dY = dyd0_dy * dy_dY + dyd0_dcdist * dcdist_dY
-                    + dyd0_dicdist2 * dicdist2_dY + k[2] * da3_dY
-                    + k[3] * da1_dY + k[10] * dr2_dY + k[11] * dr4_dY;
-                double dyd0_dZ = dyd0_dy * dy_dZ + dyd0_dcdist * dcdist_dZ
-                    + dyd0_dicdist2 * dicdist2_dZ + k[2] * da3_dZ
-                    + k[3] * da1_dZ + k[10] * dr2_dZ + k[11] * dr4_dZ;
-                double dvecTilt_dX[]
-                    = { matTilt(0, 0) * dxd0_dX + matTilt(0, 1) * dyd0_dX,
-                        matTilt(1, 0) * dxd0_dX + matTilt(1, 1) * dyd0_dX,
-                        matTilt(2, 0) * dxd0_dX + matTilt(2, 1) * dyd0_dX };
-                double dvecTilt_dY[]
-                    = { matTilt(0, 0) * dxd0_dY + matTilt(0, 1) * dyd0_dY,
-                        matTilt(1, 0) * dxd0_dY + matTilt(1, 1) * dyd0_dY,
-                        matTilt(2, 0) * dxd0_dY + matTilt(2, 1) * dyd0_dY };
-                double dvecTilt_dZ[]
-                    = { matTilt(0, 0) * dxd0_dZ + matTilt(0, 1) * dyd0_dZ,
-                        matTilt(1, 0) * dxd0_dZ + matTilt(1, 1) * dyd0_dZ,
-                        matTilt(2, 0) * dxd0_dZ + matTilt(2, 1) * dyd0_dZ };
-                double dinvProj_dX = 0;
-                double dinvProj_dY = 0;
-                double dinvProj_dZ = 0;
-                if (vecTilt(2)) {
-                    dinvProj_dX = -invProj * invProj * dvecTilt_dX[2];
-                    dinvProj_dY = -invProj * invProj * dvecTilt_dY[2];
-                    dinvProj_dZ = -invProj * invProj * dvecTilt_dZ[2];
-                }
-                double dxd_dX
-                    = vecTilt(0) * dinvProj_dX + invProj * dvecTilt_dX[0];
-                double dxd_dY
-                    = vecTilt(0) * dinvProj_dY + invProj * dvecTilt_dY[0];
-                double dxd_dZ
-                    = vecTilt(0) * dinvProj_dZ + invProj * dvecTilt_dZ[0];
-                double dyd_dX
-                    = vecTilt(1) * dinvProj_dX + invProj * dvecTilt_dX[1];
-                double dyd_dY
-                    = vecTilt(1) * dinvProj_dY + invProj * dvecTilt_dY[1];
-                double dyd_dZ
-                    = vecTilt(1) * dinvProj_dZ + invProj * dvecTilt_dZ[1];
-                dpdo_p[i * 3] = fx * dxd_dX;
-                dpdo_p[i * 3 + 1] = fx * dxd_dY;
-                dpdo_p[i * 3 + 2] = fx * dxd_dZ;
-                dpdo_p[dpdo_step + i * 3] = fy * dyd_dX;
-                dpdo_p[dpdo_step + i * 3 + 1] = fy * dyd_dY;
-                dpdo_p[dpdo_step + i * 3 + 2] = fy * dyd_dZ;
                 dpdo_p += dpdo_step * 2;
             }
         }
