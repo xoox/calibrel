@@ -1,5 +1,9 @@
 ### calibrel: More Accurate Camera Calibration with Imperfect Planar Target
 
+**_Deprecated. This implementation has been integrated into OpenCV 4.0.
+See [opencv/opencv/#12772](https://github.com/opencv/opencv/pull/12772)
+for details. The C++ interface in OpenCV is `calibrateCameraRO()`_**
+
 This calibration code is based on the paper:
 K. H. Strobl and G. Hirzinger. "[More Accurate Pinhole Camera
 Calibration with Imperfect Planar
